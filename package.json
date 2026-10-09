@@ -1,0 +1,24 @@
+{
+  "name": "ai-vision-inspector",
+  "version": "1.0.0",
+  "description": "AI Vision Inspector — upload an image, detect objects with confidence, get a useful interpretation and recommendations.",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": [
+    "ai",
+    "vision",
+    "object-detection",
+    "coco-ssd",
+    "tensorflowjs",
+    "hackathon"
+  ],
+  "author": "AI Vision Inspector Team",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}

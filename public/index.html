@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AI Vision Inspector</title>
+    <link rel="stylesheet" href="styles.css" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>👁️</text></svg>"
+    />
+  </head>
+  <body>
+    <div class="video-backdrop" aria-hidden="true">
+      <video id="backgroundVideo" autoplay loop muted playsinline preload="auto" poster="/media/domain-poster.jpg" tabindex="-1">
+        <source src="/media/domain-background.mp4" type="video/mp4" />
+      </video>
+    </div>
+    <canvas id="bg" aria-hidden="true"></canvas>
+
+    <!-- 2D glowing cursor -->
+    <div class="cursor-ring" id="cursorRing"></div>
+    <div class="cursor" id="cursor"></div>
+
+    <div role="status" aria-live="polite" id="modelStatus" class="status status--loading" data-magnetic>
+      <span class="dot"></span><span class="label">waking the machine…</span>
+    </div>
+
+    <!-- Database history launcher -->
+    <button type="button" id="dbBtn" class="db-launch" data-magnetic>⛁ <span>database</span></button>
+
+    <!-- Database modal -->
+    <div class="modal" id="dbModal" role="dialog" aria-modal="true" aria-label="Scan database" hidden>
+      <div class="modal-card glass-deep">
+        <div class="modal-head">
+          <span>scan database</span>
+          <div class="modal-actions">
+            <button type="button" class="control c-clear" id="dbClear" data-magnetic>clear all</button>
+            <button type="button" class="control control--ghost" id="dbClose" data-magnetic>close</button>
+          </div>
+        </div>
+        <div class="db-list" id="dbList"><span class="history-empty">no scans stored yet</span></div>
+      </div>
+    </div>
+
+    <!-- Live person-analysis popup (for-fun scores) -->
+    <div class="popup" id="personPopup" hidden>
+      <div class="popup-card glass-deep">
+        <div class="popup-head">
+          <span>✦ live person analysis</span>
+          <button type="button" class="control control--ghost" id="popupClose" aria-label="Close person analysis" data-magnetic>×</button>
+        </div>
+        <div id="popupBody" class="popup-body"><span class="history-empty">point the camera at a person…</span></div>
+        <div class="popup-foot">playful heuristic from face landmarks &amp; colour — not a real judgment of anyone</div>
+      </div>
+    </div>
+
+    <div class="world" id="world">
+      <!-- HERO -->
+      <section class="scene scene--hero" data-depth="0">
+        <div class="hero-eye" id="heroEye" data-float>
+          <div class="eye-inner" id="eyeInner">
+            <div class="iris" id="iris"><div class="pupil" id="pupil"></div><div class="glint"></div></div>
+          </div>
+        </div>
+        <h1 class="mega rainbow" data-split>VISION</h1>
+        <h1 class="mega mega--outline" data-split>INSPECTOR</h1>
+        <p class="whisper" data-float>feed it an image · it sees · it understands · you direct it</p>
+        <div class="scroll-cue" data-float>scroll into the eye ↓</div>
+      </section>
+
+      <!-- DASHBOARD -->
+      <section class="scene scene--dash" id="stageScene" data-depth="1">
+        <p class="eyebrow" data-reveal>interactive vision dashboard</p>
+        <div class="dash" data-reveal>
+          <!-- Left: image + controls -->
+          <div class="dash-col">
+            <div class="stage glass-deep" id="dropzone" data-magnetic>
+              <input type="file" id="fileInput" accept="image/*" hidden />
+              <video id="webcam" playsinline muted hidden></video>
+              <div id="dropPrompt" class="drop-prompt">
+                <span class="drop-glyph">⊹</span>
+                <span class="drop-line">release an image into the field</span>
+              </div>
+              <div class="canvas-wrap" id="canvasWrap" hidden>
+                <canvas id="canvas"></canvas>
+                <div id="spinner" class="spinner" hidden><span></span>seeing…</div>
+              </div>
+            </div>
+            <div class="controls">
+              <button type="button" class="control c-choose" id="browseBtn" data-magnetic>choose</button>
+              <button type="button" class="control c-sample" id="sampleBtn" data-magnetic>sample</button>
+              <button type="button" class="control c-cam" id="camBtn" data-magnetic>camera</button>
+              <button type="button" class="control c-live" id="liveBtn" data-magnetic hidden>go live</button>
+              <button type="button" class="control c-shot" id="shotBtn" data-magnetic hidden>capture</button>
+              <button type="button" class="control c-ocr" id="ocrBtn" data-magnetic hidden>read text</button>
+              <button type="button" class="control c-reveal" id="revealBtn" data-magnetic hidden>✦ reveal person</button>
+              <button type="button" class="control control--ghost" id="resetBtn" data-magnetic hidden>reset</button>
+            </div>
+            <div class="toolbar glass-deep" id="toolbar" hidden>
+              <label class="tool tool--slider">
+                <span>min confidence <b id="threshVal">50%</b></span>
+                <input type="range" id="threshold" min="0" max="90" value="50" step="5" />
+              </label>
+              <button type="button" class="tool tool--toggle active" id="boxToggle" data-magnetic>◻ boxes</button>
+              <button type="button" class="tool" id="downloadBtn" data-magnetic>⭳ download</button>
+            </div>
+          </div>
+
+          <!-- Right: command console + history -->
+          <div class="dash-col">
+            <div class="console glass-deep">
+              <div class="console-head">
+                <span>direct the inspector</span>
+                <span class="chips-mini">
+                  <span class="nlu" id="nluStatus">keyword mode</span>
+                  <span class="nlu" id="faceStatus">face: off</span>
+                </span>
+              </div>
+              <div class="quick" id="quickActions">
+                <button type="button" class="qa" data-cmd="blur the background">blur bg</button>
+                <button type="button" class="qa" data-cmd="convert to grayscale">grayscale</button>
+                <button type="button" class="qa" data-cmd="highlight people">highlight people</button>
+                <button type="button" class="qa" data-cmd="redact people">redact people</button>
+                <button type="button" class="qa" data-cmd="crop to the main subject">crop subject</button>
+                <button type="button" class="qa" data-cmd="detect edges">edges</button>
+                <button type="button" class="qa" data-cmd="count people">count people</button>
+                <button type="button" class="qa" data-cmd="reset the image">reset</button>
+              </div>
+              <div class="cmd-row">
+                <input aria-label="Image editing command" id="cmdInput" type="text" autocomplete="off"
+                  placeholder="e.g. blur the background · count the cars · crop to the dog" />
+                <button type="button" class="control c-run" id="cmdSend" data-magnetic>run</button>
+              </div>
+              <div role="status" aria-live="polite" id="cmdResponse" class="cmd-response">load an image, then tell me what to do with it.</div>
+            </div>
+
+            <div class="ocr-panel glass-deep" id="ocrPanel" hidden>
+              <div class="console-head"><span>text &amp; translation</span><span class="nlu" id="ocrStatus">idle</span></div>
+              <div class="ocr-block"><span class="ocr-label">detected · <b id="ocrLang">—</b></span><p id="ocrText">—</p></div>
+              <div class="ocr-block"><span class="ocr-label">english</span><p id="ocrTranslation">—</p></div>
+            </div>
+
+            <div class="history glass-deep">
+              <span class="ledger-key">session history</span>
+              <div id="historyList" class="history-list"><span class="history-empty">inspections you run appear here</span></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- READOUT -->
+      <section class="scene scene--read" id="readScene" data-depth="2">
+        <div id="emptyResults" class="empty" data-float>
+          <span class="empty-glyph">◎</span><span>the reading will surface here</span>
+        </div>
+        <div id="results" hidden>
+          <div class="scene-name" data-reveal>
+            <span class="scene-eyebrow">interpretation</span>
+            <span id="sceneBadge" class="scene-badge">—</span>
+          </div>
+          <p id="sceneSummary" class="read-summary" data-reveal>—</p>
+
+          <div class="subject" id="subjectBlock" data-reveal hidden>
+            <span class="subject-key">identified as (ImageNet CNN)</span>
+            <div id="classChips" class="chips"></div>
+          </div>
+
+          <div class="metrics" data-reveal>
+            <div class="metric"><span class="m-val" id="statObjects">0</span><span class="m-key">objects</span></div>
+            <div class="metric"><span class="m-val" id="statTypes">0</span><span class="m-key">types</span></div>
+            <div class="metric"><span class="m-val" id="statConfidence">0%</span><span class="m-key">confidence</span></div>
+          </div>
+
+          <ul id="recommendations" class="recs" data-reveal></ul>
+
+          <div class="ledger">
+            <span class="ledger-key" data-reveal>detected objects &amp; advisories</span>
+            <ul id="detectionList" class="detections"></ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- OUTRO -->
+      <section class="scene scene--outro" data-depth="3">
+        <p class="whisper" data-float>COCO-SSD · MobileNet · DistilBERT-MNLI · Node/Express · refractive video glass</p>
+        <h2 class="mega mega--small rainbow" data-split>IT SEES.</h2>
+      </section>
+    </div>
+
+    <!-- SVG refraction filter for liquid-glass edges -->
+    <svg width="0" height="0" style="position:absolute">
+      <filter id="glassDistort">
+        <feTurbulence type="fractalNoise" baseFrequency="0.012 0.016" numOctaves="2" seed="7" result="n" />
+        <feDisplacementMap in="SourceGraphic" in2="n" scale="14" xChannelSelector="R" yChannelSelector="G" />
+      </filter>
+    </svg>
+
+    <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/ScrollTrigger.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.13/dist/face-api.min.js"></script>
+    <script>if (window.faceapi) window.tf = window.faceapi.tf;</script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.1/dist/mobilenet.min.js"></script>
+
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <script type="module" src="nlu.js"></script>
+    <script src="extras.js"></script>
+    <script src="scene.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
